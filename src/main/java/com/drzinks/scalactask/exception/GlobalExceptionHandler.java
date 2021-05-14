@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @ControllerAdvice()
 @Slf4j
-/* handle Throwables */
+/* handle Throwables that can occur starting from getContributors processing */
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(Throwable.class)
