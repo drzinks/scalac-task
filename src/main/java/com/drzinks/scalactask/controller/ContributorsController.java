@@ -1,6 +1,8 @@
 package com.drzinks.scalactask.controller;
 
 import com.drzinks.scalactask.connector.GitHubConnector;
+import com.drzinks.scalactask.model.Contributor;
+import com.drzinks.scalactask.service.ContributorsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
@@ -8,19 +10,20 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController()
 @Slf4j
 @Validated
 public class ContributorsController {
-
+    //TODO: add hateos
     @Autowired
-    GitHubConnector gitHubConnector;
+    ContributorsService contributorsService;
 
     @GetMapping(value = "/org/{orgName}/contributors")
-    public String getContributors(@PathVariable(value = "orgName") String orgName){
+    public List<Contributor> getContributors(@PathVariable(value = "orgName") String orgName){
         log.info("Request for " + orgName +" was made.");
-        gitHubConnector.getRepositoryNamesPerOrg(orgName);
-        return orgName;
+        return contributorsService.getContributors(orgName);
     }
 
 }

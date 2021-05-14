@@ -10,7 +10,9 @@ import lombok.Setter;
 @Setter
 @EqualsAndHashCode
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class GitHubRepository {
-    @JsonProperty("contributors_url")
-    private String ContributorsUrl;
+public class Contributor {
+    @JsonProperty("login")
+    private String name;
+    @JsonProperty("contributions")
+    private int contributions;
 }

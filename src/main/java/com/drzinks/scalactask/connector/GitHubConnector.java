@@ -21,30 +21,47 @@ public class GitHubConnector {
     private String authToken;
     @Value("${github.api.url}")
     private String apiBaseUrl;
+    @Value("${github.pagesize}")
+    private int pageSize;
+
     private RestTemplate restTemplate;
 
     //https://api.github.com/
     //https://api.github.com/orgs/adobe/repos
     //https://api.github.com/repos/adobe/brackets-app/contributors
 
-    public List<String> getRepositoryNamesPerOrg(String orgName) {
-        //TODO: use new RestTemplateBuilder().errorHandler
+    public List<String> getRepositoryContributorUrlsPerOrg(String orgName) {
+        //TODO: use new RestTemplateBuilder().errorHandler 404 and so on
         //TODO: add pagination handling
         restTemplate = new RestTemplate();
-        String url = apiBaseUrl + "orgs/adobe/repos";
+        //?page1&per_page=100
+        boolean notLastPage = true;
+        int i = 1;
+        String url;
         LinkedMultiValueMap<String, String> headers = new LinkedMultiValueMap(1);
         List<String> headersValues = new ArrayList<>();
-        headersValues.add("Token " + authToken);
+        headersValues.add("Bearer " + authToken);
         headers.put("Authorization", headersValues);
         HttpEntity<String> httpEntity = new HttpEntity<String>(headers);
         Object[] objects;
-        objects = restTemplate.exchange(url, HttpMethod.GET, httpEntity, Object[].class).getBody();
-
         ObjectMapper objectMapper = new ObjectMapper();
-        List<String> repositories = Arrays.stream(objects)
-                .map(object -> objectMapper.convertValue(object, GitHubRepository.class))
-                .map(GitHubRepository::getName)
-                .collect(Collectors.toList());
+        List<String> repositories = new ArrayList<>();
+        while(notLastPage){
+            url = String.format(apiBaseUrl + "orgs/%s/repos?page%d&per_page=%d",orgName,i,pageSize);
+            objects = restTemplate.exchange(url, HttpMethod.GET, httpEntity, Object[].class).getBody();
+            if(objects != null && objects.length >0) {
+                repositories.addAll(
+                        Arrays.stream(objects)
+                                .map(object -> objectMapper.convertValue(object, GitHubRepository.class))
+                                .map(GitHubRepository::getContributorsUrl)
+                                .collect(Collectors.toList())
+                );
+            } else{
+                notLastPage = false;
+            }
+            i++;
+        }
+
         return repositories;
     }
 
