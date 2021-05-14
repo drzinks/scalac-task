@@ -1,3 +1,18 @@
+*/.idea
+*.prefs
+.settings/
+.settings
+target/*
+.project/
+.project
+*.project
+*/*.iml
+*.iml
+.idea/
+common.properties
+*.classpath
+.classpath
+
 # Compiled class file
 *.class
 
