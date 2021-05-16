@@ -10,7 +10,7 @@ import lombok.Setter;
 @Setter
 @EqualsAndHashCode
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class GitHubRepository {
+public class GitHubRepositoryNarrowedModel {
     @JsonProperty("contributors_url")
     private String ContributorsUrl;
 }
