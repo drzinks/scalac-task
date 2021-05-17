@@ -18,6 +18,6 @@ public class Contributor implements Comparable<Contributor>{
 
     @Override
     public int compareTo(Contributor o) {
-        return this.contributions-o.getContributions();
+        return o.getContributions() - this.contributions;
     }
 }
