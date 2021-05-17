@@ -12,9 +12,6 @@ import java.util.Arrays;
 public class GitHubConnectorTest {
 
     private GitHubConnector gitHubConnector;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
 
     @Before
     public void setup(){
@@ -40,55 +37,30 @@ public class GitHubConnectorTest {
     }
 
     @Test(expected = MalformedLinkHeader.class)
-    public void testHasNextPageMalformedHeader() throws MalformedLinkHeader {
-        String input = "sul8r";
-        gitHubConnector.hasNextPage(Arrays.asList(input));
-    }
-
-    @Test(expected = MalformedLinkHeader.class)
     public void testHasNextPageMalformedHeader2() throws MalformedLinkHeader {
         gitHubConnector.hasNextPage(null);
     }
 
     @Test
-    public void testGetLastPageFound() throws MalformedLinkHeader {
-        /*two digit last page*/
-        String input = "<https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=2>; rel=\"next\"," +
-                " <https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=64>; rel=\"last\"";
-
-        int lastpage = gitHubConnector.getLastPage(Arrays.asList(input));
-        assertEquals(64,lastpage);
+    public void testgetNextPageUrl() {
+        String nextPage = gitHubConnector.getNextPageUrl("<https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel=\"prev\"," +
+                " <https://api.github.com/organizations/139426/repos?page=3&per_page=5>; rel=\"next\"," +
+                " <https://api.github.com/organizations/139426/repos?page=40&per_page=5>; rel=\"last\"," +
+                " <https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel=\"first\"");
+        assertEquals("https://api.github.com/organizations/139426/repos?page=3&per_page=5",nextPage);
     }
 
     @Test
-    public void testGetLastPageFound2() throws MalformedLinkHeader {
-        /*one digit last page*/
-        String input = "<https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=2>; rel=\"next\"," +
-                " <https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=6>; rel=\"last\"";
-
-        int lastpage = gitHubConnector.getLastPage(Arrays.asList(input));
-        assertEquals(6,lastpage);
+    public void testgetNextPageUrlNotFound() {
+        String nextPage = gitHubConnector.getNextPageUrl("<https://api.github.com/organizations/139426/repos?page=39&per_page=5>; rel=\"prev\"," +
+                " <https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel=\"first\"");
+        assertEquals("",nextPage);
     }
 
     @Test
-    public void testGetLastPageNotFound() throws MalformedLinkHeader {
-        String input = "<https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=63>; rel=\"prev\"," +
-                " <https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=1>; rel=\"first\"";
-        int lastpage = gitHubConnector.getLastPage(Arrays.asList(input));
-        assertEquals(0,lastpage);
-    }
-
-    @Test(expected = MalformedLinkHeader.class)
-    public void testGetLastPageMalformedHeader1() throws MalformedLinkHeader {
-        String input = "s/476009/repos?page1=&per_page=10&page=1>; rel=\"first\"";
-        gitHubConnector.getLastPage(Arrays.asList(input," df"));
-    }
-
-    @Test(expected = MalformedLinkHeader.class)
-    public void testGetLastPageMalformedHeader2() throws MalformedLinkHeader {
-        String input = "<https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=2>; rel=\"next\"," +
-                " <https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=wtf>; rel=\"last\"";
-        gitHubConnector.getLastPage(Arrays.asList(input));
+    public void testgetNextPageUrlNotFound2() {
+        String nextPage = gitHubConnector.getNextPageUrl("***** ***");
+        assertEquals("",nextPage);
     }
 
 }

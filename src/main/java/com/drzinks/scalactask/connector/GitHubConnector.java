@@ -5,15 +5,13 @@ import com.drzinks.scalactask.exception.RestTemplateResponseErrorHandler;
 import com.drzinks.scalactask.model.GitHubRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Repository;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
@@ -30,6 +28,8 @@ public class GitHubConnector {
     public static final String LAST_MARKER = "rel=\"last\"";
     public static final String PREVIOUS_MARKER = "rel=\"prev\"";
     public static final String FIRST_MARKER = "rel=\"first\"";
+    public static final String LINK_SEPARATION = ",";
+    public static final int FIRST_PAGE = 1;
     @Value("${github.token}")
     private String authToken;
     @Value("${github.api.url}")
@@ -37,39 +37,43 @@ public class GitHubConnector {
     @Value("${github.pagesize}")
     private int pageSize;
 
+    @Autowired
     private RestTemplate restTemplate;
-    
+
     public List<String> getRepositoryContributorUrlsPerOrg(String orgName) throws MalformedLinkHeader {
         //TODO: make tests for RestTemplateBuilder().errorHandler 404 and so on
-        restTemplate = new RestTemplateBuilder()
-                .errorHandler(new RestTemplateResponseErrorHandler()
-                        .setPath(String.format(apiBaseUrl + "orgs/%s/repos",orgName)))
-                .build();
+        restTemplate.setErrorHandler(new RestTemplateResponseErrorHandler().setPath(String.format(apiBaseUrl + "orgs/%s/repos", orgName)));
         String url;
+        HttpEntity<String> httpEntity = getHttpEntity();
+        List<String> repositories = new ArrayList<>();
+        boolean hasNext = false;
+        url = String.format(apiBaseUrl + "orgs/%s/repos?page%d&per_page=%d", orgName, FIRST_PAGE, pageSize);
+        List<String> links = call2ApiAndReturnResponseLinkHeader(url, httpEntity, repositories);
+        if (hasNextPage(links)) {
+            do {
+                url = getNextPageUrl(links.get(0)); //not null - it was checked in hasNextPage method
+                links = call2ApiAndReturnResponseLinkHeader(url, httpEntity, repositories);
+                hasNext = hasNextPage(links);
+            } while (hasNext);
+        }
+        return repositories;
+    }
+
+    private HttpEntity<String> getHttpEntity() {
         HttpHeaders htpHeaders = new HttpHeaders();
         htpHeaders.setBearerAuth(authToken);
         HttpEntity<String> httpEntity = new HttpEntity<String>(htpHeaders);
-        Object[] objects;
-        ObjectMapper objectMapper = new ObjectMapper();
-        List<String> repositories = new ArrayList<>();
-        int currentPage = 1;
-        int lastPage = 0;
-        boolean hasNext = true;
-        do{
-            // TODO: fetch url for 2+ pages from received link header in future
-            url = String.format(apiBaseUrl + "orgs/%s/repos?page%d&per_page=%d",orgName,currentPage,pageSize);
-            ResponseEntity<Object[]> responseEntity = restTemplate.exchange(url, HttpMethod.GET, httpEntity, Object[].class);
-            List<String> links = responseEntity.getHeaders().get("Link");
-            objects = responseEntity.getBody();
-            deserializeAndStoreInRepositoriesList(objects, objectMapper, repositories);
-            hasNext = hasNextPage(links);
-            if(currentPage == 1){
-                lastPage = getLastPage(links);
-            }
-            currentPage++;
-        }while(hasNext && (currentPage <= lastPage));
+        return httpEntity;
+    }
 
-        return repositories;
+    private List<String> call2ApiAndReturnResponseLinkHeader(String url, HttpEntity<String> httpEntity, List<String> repositories) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        Object[] objects;
+        ResponseEntity<Object[]> responseEntity = restTemplate.exchange(url, HttpMethod.GET, httpEntity, Object[].class);
+        List<String> links = responseEntity.getHeaders().get("Link");
+        objects = responseEntity.getBody();
+        deserializeAndStoreInRepositoriesList(objects, objectMapper, repositories);
+        return links;
     }
 
     private void deserializeAndStoreInRepositoriesList(Object[] objects, ObjectMapper objectMapper, List<String> repositories) {
@@ -84,51 +88,38 @@ public class GitHubConnector {
     }
 
     protected boolean hasNextPage(List<String> linkList) throws MalformedLinkHeader {
-        if(linkList != null && linkList.size() == 1){
+        if (linkList != null && linkList.size() == 1) {
             String link = linkList.get(0);
-            if(link.contains(NEXT_MARKER) && link.contains(LAST_MARKER)){
+            if (link!=null && link.contains(NEXT_MARKER)) {
                 return true;
-            } else if(link.contains(PREVIOUS_MARKER) && link.contains(FIRST_MARKER)){
-                return false;
             } else {
-                log.warn("Cannot parse link from GitHub response");
-                log.warn("Link that was received: " + link);
-                throw new MalformedLinkHeader();
+                return false;
             }
-        }else{
+        } else {
             log.warn("Cannot parse link from GitHub response");
             throw new MalformedLinkHeader();
         }
     }
 
-    protected int getLastPage(List<String> linkList) throws MalformedLinkHeader {
-        if(linkList != null && linkList.size() == 1){
-            String link = linkList.get(0);
-            if(link.contains("rel=\"last\"")){
-                String[] tempArray = link.split(",");
-                if(tempArray != null && tempArray.length == 2){
-                    String splittedLink = tempArray[1];
-                    String lastpage = splittedLink.substring(splittedLink.lastIndexOf(PAGE_MARKER)+PAGE_MARKER.length(),
-                                      splittedLink.indexOf(">"));
-                    try {
-                        int lastpageInt = Integer.valueOf(lastpage);
-                        return lastpageInt;
-                    } catch(NumberFormatException e){
-                        log.warn("Cannot parse link from GitHub response - while fetching last page, cannot transform to int");
-                        throw new MalformedLinkHeader();
-                    }
-                }else{
-                    log.warn("Cannot parse link from GitHub response - while fetching last page");
-                    throw new MalformedLinkHeader();
-                }
-            }else{
-                return 0; //last page not found
-            }
-        }else{
-            log.warn("Cannot parse link from GitHub response - while fetching last page");
-            throw new MalformedLinkHeader();
-        }
-    }
+    protected String getNextPageUrl(String link){
+        //<https://api.github.com/organizations/139426/repos?page=2&per_page=5>; rel="next",
+        // <https://api.github.com/organizations/139426/repos?page=40&per_page=5>; rel="last"
+            //or
+        //<https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel="prev",
+        // <https://api.github.com/organizations/139426/repos?page=3&per_page=5>; rel="next",
+        // <https://api.github.com/organizations/139426/repos?page=40&per_page=5>; rel="last",
+        // <https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel="first"
+            //or
+        //<https://api.github.com/organizations/139426/repos?page=39&per_page=5>; rel="prev",
+        // <https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel="first"
 
+        for (String part : link.split(LINK_SEPARATION)) {
+            if(part.contains(NEXT_MARKER)){
+                return part.substring(part.indexOf("<") + 1,part.indexOf(">"));
+            }
+        }
+
+        return "";
+    }
 
 }
