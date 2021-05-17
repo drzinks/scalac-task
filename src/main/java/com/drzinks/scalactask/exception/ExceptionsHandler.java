@@ -13,11 +13,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 @Order(Ordered.HIGHEST_PRECEDENCE) //it is due to Spring always handled Throwables
 public class ExceptionsHandler {
 
-    @ExceptionHandler(MalformedLinkHeader.class)
-    public ResponseEntity<String> handleMalformedUrlException(Throwable ex) {
-        return new ResponseEntity<String>("GitHub api is failing.", HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
     @ExceptionHandler(GitHubApiException.class)
     public ResponseEntity<ApiError> handleGitHubApiException(GitHubApiException e) {
         log.error(e.getApiError().toString());

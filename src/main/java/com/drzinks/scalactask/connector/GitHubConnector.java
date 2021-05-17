@@ -1,7 +1,7 @@
 package com.drzinks.scalactask.connector;
 
-import com.drzinks.scalactask.exception.MalformedLinkHeader;
 import com.drzinks.scalactask.exception.RestTemplateResponseErrorHandler;
+import com.drzinks.scalactask.model.Contributor;
 import com.drzinks.scalactask.model.GitHubRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -16,13 +16,14 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Repository
 @Slf4j
 public class GitHubConnector {
-
+    //TODO: make tests for RestTemplateBuilder().errorHandler 404 and so on
     public static final String PAGE_MARKER = "&page=";
     public static final String NEXT_MARKER = "rel=\"next\"";
     public static final String LAST_MARKER = "rel=\"last\"";
@@ -40,8 +41,26 @@ public class GitHubConnector {
     @Autowired
     private RestTemplate restTemplate;
 
-    public List<String> getRepositoryContributorUrlsPerOrg(String orgName) throws MalformedLinkHeader {
+    public List<Contributor> getContributors(String receivedUrl){
         //TODO: make tests for RestTemplateBuilder().errorHandler 404 and so on
+        restTemplate.setErrorHandler(new RestTemplateResponseErrorHandler().setPath(receivedUrl));
+        String url;
+        HttpEntity<String> httpEntity = getHttpEntity();
+        List<Contributor> contributors = new LinkedList<>();
+        boolean hasNext = false;
+        url = String.format(receivedUrl + "?page%d&per_page=%d", FIRST_PAGE, pageSize);
+        List<String> links = contributorCall2ApiAndReturnResponseLinkHeader(url, httpEntity, contributors);
+        if (hasNextPage(links)) {
+            do {
+                url = getNextPageUrl(links.get(0)); //not null - it was checked in hasNextPage method
+                links = contributorCall2ApiAndReturnResponseLinkHeader(url, httpEntity, contributors);
+                hasNext = hasNextPage(links);
+            } while (hasNext);
+        }
+        return contributors;
+    }
+
+    public List<String> getRepositoryContributorUrlsPerOrg(String orgName){
         restTemplate.setErrorHandler(new RestTemplateResponseErrorHandler().setPath(String.format(apiBaseUrl + "orgs/%s/repos", orgName)));
         String url;
         HttpEntity<String> httpEntity = getHttpEntity();
@@ -76,6 +95,7 @@ public class GitHubConnector {
         return links;
     }
 
+
     private void deserializeAndStoreInRepositoriesList(Object[] objects, ObjectMapper objectMapper, List<String> repositories) {
         if (objects != null && objects.length > 0) {
             repositories.addAll(
@@ -87,35 +107,51 @@ public class GitHubConnector {
         }
     }
 
-    protected boolean hasNextPage(List<String> linkList) throws MalformedLinkHeader {
-        if (linkList != null && linkList.size() == 1) {
-            String link = linkList.get(0);
-            if (link!=null && link.contains(NEXT_MARKER)) {
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            log.warn("Cannot parse link from GitHub response");
-            throw new MalformedLinkHeader();
+    private List<String> contributorCall2ApiAndReturnResponseLinkHeader(String url, HttpEntity<String> httpEntity, List<Contributor> contributors) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        Object[] objects;
+        ResponseEntity<Object[]> responseEntity = restTemplate.exchange(url, HttpMethod.GET, httpEntity, Object[].class);
+        List<String> links = responseEntity.getHeaders().get("Link");
+        objects = responseEntity.getBody();
+        deserializeAndStoreInContributorsList(objects, objectMapper, contributors);
+        return links;
+    }
+
+    private void deserializeAndStoreInContributorsList(Object[] objects, ObjectMapper objectMapper, List<Contributor> contributors) {
+        if (objects != null && objects.length > 0) {
+            contributors.addAll(
+                    Arrays.stream(objects)
+                            .map(object -> objectMapper.convertValue(object, Contributor.class))
+                            .collect(Collectors.toList())
+            );
         }
     }
 
-    protected String getNextPageUrl(String link){
+    protected boolean hasNextPage(List<String> linkList){
+        if (linkList != null && linkList.size() == 1) {
+            String link = linkList.get(0);
+            if (link != null && link.contains(NEXT_MARKER)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected String getNextPageUrl(String link) {
         //<https://api.github.com/organizations/139426/repos?page=2&per_page=5>; rel="next",
         // <https://api.github.com/organizations/139426/repos?page=40&per_page=5>; rel="last"
-            //or
+        //or
         //<https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel="prev",
         // <https://api.github.com/organizations/139426/repos?page=3&per_page=5>; rel="next",
         // <https://api.github.com/organizations/139426/repos?page=40&per_page=5>; rel="last",
         // <https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel="first"
-            //or
+        //or
         //<https://api.github.com/organizations/139426/repos?page=39&per_page=5>; rel="prev",
         // <https://api.github.com/organizations/139426/repos?page=1&per_page=5>; rel="first"
 
         for (String part : link.split(LINK_SEPARATION)) {
-            if(part.contains(NEXT_MARKER)){
-                return part.substring(part.indexOf("<") + 1,part.indexOf(">"));
+            if (part.contains(NEXT_MARKER)) {
+                return part.substring(part.indexOf("<") + 1, part.indexOf(">"));
             }
         }
 

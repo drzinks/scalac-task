@@ -1,13 +1,11 @@
 package com.drzinks.scalactask.connector;
 
-import com.drzinks.scalactask.exception.MalformedLinkHeader;
-import static org.junit.Assert.*;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
+
+import static org.junit.Assert.assertEquals;
 
 public class GitHubConnectorTest {
 
@@ -19,7 +17,7 @@ public class GitHubConnectorTest {
     }
 
     @Test
-    public void testHasNextPageTrue() throws MalformedLinkHeader {
+    public void testHasNextPageTrue(){
         String input = "<https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=2>; rel=\"next\"," +
                        " <https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=64>; rel=\"last\"";
 
@@ -28,17 +26,12 @@ public class GitHubConnectorTest {
     }
 
     @Test
-    public void testHasNextPageFalse() throws MalformedLinkHeader {
+    public void testHasNextPageFalse(){
         String input = "<https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=63>; rel=\"prev\"," +
                 " <https://api.github.com/organizations/476009/repos?page1=&per_page=10&page=1>; rel=\"first\"";
 
         boolean hasNext = gitHubConnector.hasNextPage(Arrays.asList(input));
         assertEquals(false,hasNext);
-    }
-
-    @Test(expected = MalformedLinkHeader.class)
-    public void testHasNextPageMalformedHeader2() throws MalformedLinkHeader {
-        gitHubConnector.hasNextPage(null);
     }
 
     @Test

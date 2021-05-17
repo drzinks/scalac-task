@@ -10,9 +10,14 @@ import lombok.Setter;
 @Setter
 @EqualsAndHashCode
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class Contributor {
+public class Contributor implements Comparable<Contributor>{
     @JsonProperty("login")
     private String name;
     @JsonProperty("contributions")
     private int contributions;
+
+    @Override
+    public int compareTo(Contributor o) {
+        return this.contributions-o.getContributions();
+    }
 }
