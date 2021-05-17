@@ -1,6 +1,7 @@
 package com.drzinks.scalactask.service;
 
 import com.drzinks.scalactask.connector.GitHubConnector;
+import com.drzinks.scalactask.exception.MalformedLinkHeader;
 import com.drzinks.scalactask.model.Contributor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,9 +14,9 @@ public class ContributorsService {
     @Autowired
     GitHubConnector gitHubConnector;
 
-    public List<Contributor> getContributors(String orgName){
+    public List<String> getContributors(String orgName) throws MalformedLinkHeader {
         List<String> contributorsUrlList = gitHubConnector.getRepositoryContributorUrlsPerOrg(orgName);
-        return null;
+        return contributorsUrlList;
     }
 
 }

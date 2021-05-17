@@ -1,6 +1,7 @@
 package com.drzinks.scalactask.controller;
 
 import com.drzinks.scalactask.connector.GitHubConnector;
+import com.drzinks.scalactask.exception.MalformedLinkHeader;
 import com.drzinks.scalactask.model.Contributor;
 import com.drzinks.scalactask.service.ContributorsService;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,7 @@ public class ContributorsController {
     ContributorsService contributorsService;
 
     @GetMapping(value = "/org/{orgName}/contributors")
-    public List<Contributor> getContributors(@PathVariable(value = "orgName") String orgName){
+    public List<String> getContributors(@PathVariable(value = "orgName") String orgName) throws MalformedLinkHeader {
         log.info("Request for " + orgName +" was made.");
         return contributorsService.getContributors(orgName);
     }
