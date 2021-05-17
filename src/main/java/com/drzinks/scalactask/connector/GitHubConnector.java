@@ -1,10 +1,12 @@
 package com.drzinks.scalactask.connector;
 
 import com.drzinks.scalactask.exception.MalformedLinkHeader;
+import com.drzinks.scalactask.exception.RestTemplateResponseErrorHandler;
 import com.drzinks.scalactask.model.GitHubRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -24,6 +26,10 @@ import java.util.stream.Collectors;
 public class GitHubConnector {
 
     public static final String PAGE_MARKER = "&page=";
+    public static final String NEXT_MARKER = "rel=\"next\"";
+    public static final String LAST_MARKER = "rel=\"last\"";
+    public static final String PREVIOUS_MARKER = "rel=\"prev\"";
+    public static final String FIRST_MARKER = "rel=\"first\"";
     @Value("${github.token}")
     private String authToken;
     @Value("${github.api.url}")
@@ -32,16 +38,13 @@ public class GitHubConnector {
     private int pageSize;
 
     private RestTemplate restTemplate;
-
-    //https://api.github.com/
-    //https://api.github.com/orgs/adobe/repos
-    //https://api.github.com/repos/adobe/brackets-app/contributors
-
+    
     public List<String> getRepositoryContributorUrlsPerOrg(String orgName) throws MalformedLinkHeader {
-        //TODO: use new RestTemplateBuilder().errorHandler 404 and so on
-        //TODO: add pagination handling
-        restTemplate = new RestTemplate();
-        //?page1&per_page=100
+        //TODO: make tests for RestTemplateBuilder().errorHandler 404 and so on
+        restTemplate = new RestTemplateBuilder()
+                .errorHandler(new RestTemplateResponseErrorHandler()
+                        .setPath(String.format(apiBaseUrl + "orgs/%s/repos",orgName)))
+                .build();
         String url;
         HttpHeaders htpHeaders = new HttpHeaders();
         htpHeaders.setBearerAuth(authToken);
@@ -53,18 +56,12 @@ public class GitHubConnector {
         int lastPage = 0;
         boolean hasNext = true;
         do{
+            // TODO: fetch url for 2+ pages from received link header in future
             url = String.format(apiBaseUrl + "orgs/%s/repos?page%d&per_page=%d",orgName,currentPage,pageSize);
             ResponseEntity<Object[]> responseEntity = restTemplate.exchange(url, HttpMethod.GET, httpEntity, Object[].class);
             List<String> links = responseEntity.getHeaders().get("Link");
             objects = responseEntity.getBody();
-            if (objects != null && objects.length > 0) {
-                repositories.addAll(
-                        Arrays.stream(objects)
-                                .map(object -> objectMapper.convertValue(object, GitHubRepository.class))
-                                .map(GitHubRepository::getContributorsUrl)
-                                .collect(Collectors.toList())
-                );
-            }
+            deserializeAndStoreInRepositoriesList(objects, objectMapper, repositories);
             hasNext = hasNextPage(links);
             if(currentPage == 1){
                 lastPage = getLastPage(links);
@@ -75,12 +72,23 @@ public class GitHubConnector {
         return repositories;
     }
 
+    private void deserializeAndStoreInRepositoriesList(Object[] objects, ObjectMapper objectMapper, List<String> repositories) {
+        if (objects != null && objects.length > 0) {
+            repositories.addAll(
+                    Arrays.stream(objects)
+                            .map(object -> objectMapper.convertValue(object, GitHubRepository.class))
+                            .map(GitHubRepository::getContributorsUrl)
+                            .collect(Collectors.toList())
+            );
+        }
+    }
+
     protected boolean hasNextPage(List<String> linkList) throws MalformedLinkHeader {
         if(linkList != null && linkList.size() == 1){
             String link = linkList.get(0);
-            if(link.contains("rel=\"next\"") && link.contains("rel=\"last\"")){
+            if(link.contains(NEXT_MARKER) && link.contains(LAST_MARKER)){
                 return true;
-            } else if(link.contains("rel=\"prev\"") && link.contains("rel=\"first\"")){
+            } else if(link.contains(PREVIOUS_MARKER) && link.contains(FIRST_MARKER)){
                 return false;
             } else {
                 log.warn("Cannot parse link from GitHub response");
